@@ -1,6 +1,6 @@
 {
   "name": "y",
-  "displayName": "scoped-replace",
+  "displayName": "scpedReplace",
   "description": "Enhances VS Code's Find feature by automatically restricting search to the selected range.",
   "version": "0.0.1",
   "engines": {
@@ -10,19 +10,24 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:scopedReplace.smartFind"
+    "*"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "scopedReplace.smartFind",
-        "title": "Smart Find (Auto Selection Scope)"
+        "title": "Smart Find"
       }
     ],
     "keybindings": [
       {
-        "command": "scopedReplace.smartFind",
+        "command": "-actions.find",
+        "key": "ctrl+f",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "scpedReplace.smartFind",
         "key": "ctrl+f",
         "when": "editorTextFocus"
       }
