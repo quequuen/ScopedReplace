@@ -24,12 +24,14 @@
       {
         "command": "-actions.find",
         "key": "ctrl+f",
-        "when": "editorTextFocus"
+        "mac": "cmd+f",
+        "when": "editorFocus"
       },
       {
-        "command": "scpedReplace.smartFind",
+        "command": "scopedReplace.smartFind",
         "key": "ctrl+f",
-        "when": "editorTextFocus"
+        "mac": "cmd+f",
+        "when": "editorTextFocus && !findWidgetVisible"
       }
     ]
   },
