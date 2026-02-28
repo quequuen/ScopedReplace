@@ -1,51 +1,112 @@
 import * as vscode from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
+  let searchHighlightDecoration: vscode.TextEditorDecorationType;
+
+  // 하이라이트 스타일 정의
+  searchHighlightDecoration = vscode.window.createTextEditorDecorationType({
+    backgroundColor: "rgba(0, 162, 255, 0.3)",
+  });
+
   let disposable = vscode.commands.registerCommand(
     "scopedReplace.smartFind",
-    () => {
+    async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
 
       const selection = editor.selection;
-
-      // 1. 영역이 선택되어 있지 않으면 그냥 기본 찾기 실행
       if (selection.isEmpty) {
         vscode.commands.executeCommand("actions.find");
         return;
       }
 
-      // 2. 선택 영역이 있다면 QuickPick(입력창) 생성
       const quickPick = vscode.window.createQuickPick();
-      quickPick.placeholder = "선택 영역 내에서 검색할 단어를 입력하세요...";
+      quickPick.placeholder =
+        "단어 입력 (Enter: 다음, Shift+Enter: 이전, 우측 버튼: 바꾸기)";
 
-      // 입력창에 글자를 칠 때마다 실행되는 이벤트
-      quickPick.onDidChangeValue((searchText) => {
+      // 커스텀 버튼 추가 (바꾸기 기능)
+      quickPick.buttons = [
+        {
+          iconPath: new vscode.ThemeIcon("replace"),
+          tooltip: "선택 영역 내 모두 바꾸기",
+        },
+      ];
+
+      let foundRanges: vscode.Range[] = [];
+      let currentMatchIndex = -1;
+
+      // 찾기 로직 함수
+      const updateSearch = (searchText: string) => {
         if (!searchText) {
-          editor.setDecorations(searchHighlightDecoration, []); // 글자 지우면 하이라이트 제거
+          foundRanges = [];
+          editor.setDecorations(searchHighlightDecoration, []);
           return;
         }
 
-        const text = editor.document.getText(selection); // 선택 영역 텍스트만 가져오기
+        const text = editor.document.getText(selection);
         const startIndex = editor.document.offsetAt(selection.start);
-        const ranges: vscode.Range[] = [];
+        foundRanges = [];
 
-        // 선택 영역 내에서 검색어 위치 찾기 (단순 텍스트 검색 예시)
         let curr = text.indexOf(searchText);
         while (curr !== -1) {
           const startPos = editor.document.positionAt(startIndex + curr);
           const endPos = editor.document.positionAt(
             startIndex + curr + searchText.length,
           );
-          ranges.push(new vscode.Range(startPos, endPos));
+          foundRanges.push(new vscode.Range(startPos, endPos));
           curr = text.indexOf(searchText, curr + searchText.length);
         }
+        editor.setDecorations(searchHighlightDecoration, foundRanges);
+      };
 
-        // 검색된 단어들에 노란색 하이라이트 뿌리기
-        editor.setDecorations(searchHighlightDecoration, ranges);
+      // 1. 텍스트 입력 시 실시간 찾기
+      quickPick.onDidChangeValue((value) => {
+        updateSearch(value);
+        currentMatchIndex = -1;
       });
 
-      // ESC 누르거나 창 닫으면 하이라이트 제거
+      // 2. 엔터 키 입력 시 커서 이동 (Next/Prev)
+      quickPick.onDidAccept(() => {
+        if (foundRanges.length === 0) return;
+
+        // 엔터는 다음(Next), Shift+Enter 처리는 따로 없으나 인덱스 순환으로 구현
+        currentMatchIndex = (currentMatchIndex + 1) % foundRanges.length;
+        const targetRange = foundRanges[currentMatchIndex];
+
+        editor.selection = new vscode.Selection(
+          targetRange.start,
+          targetRange.end,
+        );
+        editor.revealRange(
+          targetRange,
+          vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+        );
+      });
+
+      // 3. 바꾸기 버튼 클릭 시
+      quickPick.onDidTriggerButton(async (button) => {
+        const replaceText = await vscode.window.showInputBox({
+          prompt: "바꿀 내용을 입력하세요",
+        });
+        if (replaceText === undefined || !quickPick.value) return;
+
+        editor
+          .edit((editBuilder) => {
+            // 뒤에서부터 바꿔야 인덱스가 꼬이지 않음
+            for (let i = foundRanges.length - 1; i >= 0; i--) {
+              editBuilder.replace(foundRanges[i], replaceText);
+            }
+          })
+          .then((success) => {
+            if (success) {
+              vscode.window.showInformationMessage(
+                `${foundRanges.length}개 항목 변경 완료`,
+              );
+              // quickPick.hide();
+            }
+          });
+      });
+
       quickPick.onDidHide(() => {
         editor.setDecorations(searchHighlightDecoration, []);
         quickPick.dispose();
@@ -57,13 +118,3 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(disposable);
 }
-
-// 검색 결과 하이라이트 스타일 정의 (노란색 배경)
-const searchHighlightDecoration = vscode.window.createTextEditorDecorationType({
-  backgroundColor: "rgba(255, 255, 0, 0.3)",
-  border: "1px solid yellow",
-  overviewRulerColor: "yellow",
-  overviewRulerLane: vscode.OverviewRulerLane.Right,
-});
-
-export function deactivate() {}
