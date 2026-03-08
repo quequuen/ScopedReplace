@@ -1,114 +1,241 @@
 import * as vscode from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
-  let searchHighlightDecoration: vscode.TextEditorDecorationType;
-
-  // 하이라이트 스타일 정의
-  searchHighlightDecoration = vscode.window.createTextEditorDecorationType({
-    backgroundColor: "rgba(0, 162, 255, 0.3)",
+  const matchDecoration = vscode.window.createTextEditorDecorationType({
+    backgroundColor: "rgba(0,162,255,0.25)",
   });
 
-  let disposable = vscode.commands.registerCommand(
+  const currentDecoration = vscode.window.createTextEditorDecorationType({
+    backgroundColor: "rgba(255,140,0,0.5)",
+  });
+
+  const disposable = vscode.commands.registerCommand(
     "scopedReplace.smartFind",
     async () => {
-      const editor = vscode.window.activeTextEditor;
+      const editor = vscode.window.activeTextEditor!;
       if (!editor) return;
 
       const selection = editor.selection;
+
       if (selection.isEmpty) {
         vscode.commands.executeCommand("actions.find");
         return;
       }
 
       const quickPick = vscode.window.createQuickPick();
-      quickPick.placeholder =
-        "단어 입력 (Enter: 다음, Shift+Enter: 이전, 우측 버튼: 바꾸기)";
+      quickPick.title = "ScopedReplace";
+      quickPick.placeholder = "검색어 입력 (Enter: next, Shift+Enter: prev)";
+      quickPick.ignoreFocusOut = true;
 
-      // 커스텀 버튼 추가 (바꾸기 기능)
+      // 옵션 상태
+      let regexEnabled = false;
+      let caseSensitive = false;
+      let wholeWord = false;
+
+      // 버튼
+      const regexBtn = {
+        iconPath: new vscode.ThemeIcon("regex"),
+        tooltip: "Regex",
+      };
+
+      const caseBtn = {
+        iconPath: new vscode.ThemeIcon("case-sensitive"),
+        tooltip: "Case Sensitive",
+      };
+
+      const wordBtn = {
+        iconPath: new vscode.ThemeIcon("whole-word"),
+        tooltip: "Whole Word",
+      };
+
+      const replaceBtn = {
+        iconPath: new vscode.ThemeIcon("replace"),
+        tooltip: "Replace Current",
+      };
+
+      const replaceAllBtn = {
+        iconPath: new vscode.ThemeIcon("replace-all"),
+        tooltip: "Replace All",
+      };
+
       quickPick.buttons = [
-        {
-          iconPath: new vscode.ThemeIcon("replace"),
-          tooltip: "선택 영역 내 모두 바꾸기",
-        },
+        regexBtn,
+        caseBtn,
+        wordBtn,
+        replaceBtn,
+        replaceAllBtn,
       ];
 
       let foundRanges: vscode.Range[] = [];
       let currentMatchIndex = -1;
 
-      // 찾기 로직 함수
-      const updateSearch = (searchText: string) => {
-        if (!searchText) {
+      function buildRegex(searchText: string): RegExp | null {
+        if (!searchText) return null;
+
+        try {
+          let pattern = searchText;
+
+          if (!regexEnabled) {
+            pattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          }
+
+          if (wholeWord) {
+            pattern = `\\b${pattern}\\b`;
+          }
+
+          const flags = caseSensitive ? "g" : "gi";
+
+          return new RegExp(pattern, flags);
+        } catch {
+          return null;
+        }
+      }
+
+      function renderDecorations() {
+        editor.setDecorations(matchDecoration, foundRanges);
+
+        if (currentMatchIndex >= 0) {
+          editor.setDecorations(currentDecoration, [
+            foundRanges[currentMatchIndex],
+          ]);
+        } else {
+          editor.setDecorations(currentDecoration, []);
+        }
+
+        quickPick.title = `ScopedReplace    ${currentMatchIndex + 1}/${foundRanges.length} matches`;
+      }
+
+      function updateSearch(searchText: string) {
+        const regex = buildRegex(searchText);
+
+        if (!regex) {
           foundRanges = [];
-          editor.setDecorations(searchHighlightDecoration, []);
+          renderDecorations();
           return;
         }
 
         const text = editor.document.getText(selection);
-        const startIndex = editor.document.offsetAt(selection.start);
+        const startOffset = editor.document.offsetAt(selection.start);
+
         foundRanges = [];
 
-        let curr = text.indexOf(searchText);
-        while (curr !== -1) {
-          const startPos = editor.document.positionAt(startIndex + curr);
-          const endPos = editor.document.positionAt(
-            startIndex + curr + searchText.length,
+        let match;
+
+        while ((match = regex.exec(text)) !== null) {
+          const start = editor.document.positionAt(startOffset + match.index);
+          const end = editor.document.positionAt(
+            startOffset + match.index + match[0].length,
           );
-          foundRanges.push(new vscode.Range(startPos, endPos));
-          curr = text.indexOf(searchText, curr + searchText.length);
+
+          foundRanges.push(new vscode.Range(start, end));
         }
-        editor.setDecorations(searchHighlightDecoration, foundRanges);
-      };
 
-      // 1. 텍스트 입력 시 실시간 찾기
-      quickPick.onDidChangeValue((value) => {
-        updateSearch(value);
         currentMatchIndex = -1;
-      });
 
-      // 2. 엔터 키 입력 시 커서 이동 (Next/Prev)
-      quickPick.onDidAccept(() => {
+        renderDecorations();
+      }
+
+      function moveNext() {
         if (foundRanges.length === 0) return;
 
-        // 엔터는 다음(Next), Shift+Enter 처리는 따로 없으나 인덱스 순환으로 구현
         currentMatchIndex = (currentMatchIndex + 1) % foundRanges.length;
-        const targetRange = foundRanges[currentMatchIndex];
 
-        editor.selection = new vscode.Selection(
-          targetRange.start,
-          targetRange.end,
-        );
+        const range = foundRanges[currentMatchIndex];
+
+        editor.selection = new vscode.Selection(range.start, range.end);
+
         editor.revealRange(
-          targetRange,
+          range,
           vscode.TextEditorRevealType.InCenterIfOutsideViewport,
         );
+
+        renderDecorations();
+      }
+
+      function movePrev() {
+        if (foundRanges.length === 0) return;
+
+        currentMatchIndex =
+          (currentMatchIndex - 1 + foundRanges.length) % foundRanges.length;
+
+        const range = foundRanges[currentMatchIndex];
+
+        editor.selection = new vscode.Selection(range.start, range.end);
+
+        editor.revealRange(
+          range,
+          vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+        );
+
+        renderDecorations();
+      }
+
+      quickPick.onDidChangeValue((value) => {
+        updateSearch(value);
       });
 
-      // 3. 바꾸기 버튼 클릭 시
-      quickPick.onDidTriggerButton(async (button) => {
-        const replaceText = await vscode.window.showInputBox({
-          prompt: "바꿀 내용을 입력하세요",
-        });
-        if (replaceText === undefined || !quickPick.value) return;
+      quickPick.onDidAccept(() => {
+        moveNext();
+      });
 
-        editor
-          .edit((editBuilder) => {
-            // 뒤에서부터 바꿔야 인덱스가 꼬이지 않음
+      vscode.commands.registerCommand("scopedReplace.prevMatch", movePrev);
+
+      quickPick.onDidTriggerButton(async (button) => {
+        if (button === regexBtn) {
+          regexEnabled = !regexEnabled;
+          updateSearch(quickPick.value);
+        }
+
+        if (button === caseBtn) {
+          caseSensitive = !caseSensitive;
+          updateSearch(quickPick.value);
+        }
+
+        if (button === wordBtn) {
+          wholeWord = !wholeWord;
+          updateSearch(quickPick.value);
+        }
+
+        if (button === replaceBtn) {
+          if (currentMatchIndex < 0) return;
+
+          const replaceText = await vscode.window.showInputBox({
+            prompt: "바꿀 내용",
+          });
+
+          if (!replaceText) return;
+
+          await editor.edit((editBuilder) => {
+            editBuilder.replace(foundRanges[currentMatchIndex], replaceText);
+          });
+
+          updateSearch(quickPick.value);
+        }
+
+        if (button === replaceAllBtn) {
+          const replaceText = await vscode.window.showInputBox({
+            prompt: "바꿀 내용",
+          });
+
+          if (!replaceText) return;
+
+          await editor.edit((editBuilder) => {
             for (let i = foundRanges.length - 1; i >= 0; i--) {
               editBuilder.replace(foundRanges[i], replaceText);
             }
-          })
-          .then((success) => {
-            if (success) {
-              vscode.window.showInformationMessage(
-                `${foundRanges.length}개 항목 변경 완료`,
-              );
-              // quickPick.hide();
-            }
           });
+
+          vscode.window.showInformationMessage(
+            `${foundRanges.length}개 항목 변경 완료`,
+          );
+
+          updateSearch(quickPick.value);
+        }
       });
 
       quickPick.onDidHide(() => {
-        editor.setDecorations(searchHighlightDecoration, []);
+        editor.setDecorations(matchDecoration, []);
+        editor.setDecorations(currentDecoration, []);
         quickPick.dispose();
       });
 
