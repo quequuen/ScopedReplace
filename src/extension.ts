@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
+  console.log("activate...");
   const matchDecoration = vscode.window.createTextEditorDecorationType({
     backgroundColor: "rgba(0,162,255,0.25)",
   });
 
   const currentDecoration = vscode.window.createTextEditorDecorationType({
-    backgroundColor: "rgba(255,140,0,0.5)",
+    backgroundColor: "rgba(0, 255, 4, 0.5)",
   });
 
   const disposable = vscode.commands.registerCommand(
@@ -27,9 +28,12 @@ export function activate(context: vscode.ExtensionContext) {
       quickPick.placeholder = "검색어 입력 (Enter: next, Shift+Enter: prev)";
       quickPick.ignoreFocusOut = true;
 
-      // 옵션 상태
+      // 옵션 상태 플래그
+      // 정규식 입력
       let regexEnabled = false;
+      // 대소문자 구분
       let caseSensitive = false;
+      // 완전 일치
       let wholeWord = false;
 
       // 버튼
@@ -70,11 +74,14 @@ export function activate(context: vscode.ExtensionContext) {
       let currentMatchIndex = -1;
 
       function buildRegex(searchText: string): RegExp | null {
+        console.log("buildRegex...");
+
         if (!searchText) return null;
 
         try {
           let pattern = searchText;
 
+          // 정규식 아닐 때 해당 조건으로 검색
           if (!regexEnabled) {
             pattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
           }
@@ -106,6 +113,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       function updateSearch(searchText: string) {
+        console.log("updateSearch...", searchText);
         const regex = buildRegex(searchText);
 
         if (!regex) {
@@ -122,6 +130,10 @@ export function activate(context: vscode.ExtensionContext) {
         let match;
 
         while ((match = regex.exec(text)) !== null) {
+          if (match.index === regex.lastIndex) {
+            regex.lastIndex++;
+          }
+
           const start = editor.document.positionAt(startOffset + match.index);
           const end = editor.document.positionAt(
             startOffset + match.index + match[0].length,
@@ -170,8 +182,13 @@ export function activate(context: vscode.ExtensionContext) {
         renderDecorations();
       }
 
+      let timer: NodeJS.Timeout;
+
       quickPick.onDidChangeValue((value) => {
-        updateSearch(value);
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          updateSearch(value);
+        }, 120);
       });
 
       quickPick.onDidAccept(() => {
