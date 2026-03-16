@@ -200,16 +200,44 @@ export function activate(context: vscode.ExtensionContext) {
       quickPick.onDidTriggerButton(async (button) => {
         if (button === regexBtn) {
           regexEnabled = !regexEnabled;
+
+          regexBtn.iconPath = new vscode.ThemeIcon(
+            regexEnabled ? "check" : "regex",
+          );
+          regexBtn.tooltip = regexEnabled ? "Regex: ON" : "Regex: OFF";
+
+          quickPick.buttons = [...quickPick.buttons];
+
           updateSearch(quickPick.value);
         }
 
         if (button === caseBtn) {
           caseSensitive = !caseSensitive;
+
+          caseBtn.iconPath = new vscode.ThemeIcon(
+            caseSensitive ? "check" : "case-sensitive",
+          );
+
+          caseBtn.tooltip = caseSensitive
+            ? "Case Sensitive: ON"
+            : "Case Sensitive: OFF";
+
+          quickPick.buttons = [...quickPick.buttons];
+
           updateSearch(quickPick.value);
         }
 
         if (button === wordBtn) {
           wholeWord = !wholeWord;
+
+          wordBtn.iconPath = new vscode.ThemeIcon(
+            wholeWord ? "check" : "whole-word",
+          );
+
+          wordBtn.tooltip = wholeWord ? "whole-word: ON" : "whole-word: OFF";
+
+          quickPick.buttons = [...quickPick.buttons];
+
           updateSearch(quickPick.value);
         }
 
@@ -231,7 +259,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (button === replaceAllBtn) {
           const replaceText = await vscode.window.showInputBox({
-            prompt: "바꿀 내용",
+            prompt: "수정할 내용",
           });
 
           if (!replaceText) return;
