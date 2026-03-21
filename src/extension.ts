@@ -1,7 +1,18 @@
 import * as vscode from "vscode";
 
+let currentQuickPick: vscode.QuickPick<vscode.QuickPickItem> | undefined;
+
+// 앱 설치할 때 버튼 만드는 단계(등록)
 export function activate(context: vscode.ExtensionContext) {
   console.log("activate...");
+
+  let prevHandler: (() => void) | undefined;
+
+  if (currentQuickPick) {
+    currentQuickPick.dispose();
+    currentQuickPick = undefined;
+  }
+
   const matchDecoration = vscode.window.createTextEditorDecorationType({
     backgroundColor: "rgba(0,162,255,0.25)",
   });
@@ -10,6 +21,13 @@ export function activate(context: vscode.ExtensionContext) {
     backgroundColor: "rgba(0, 255, 4, 0.25)",
   });
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand("scopedReplace.prevMatch", () => {
+      prevHandler?.();
+    }),
+  );
+
+  // 버튼 등록과 클릭했을 때 동작(실제 동작)
   const disposable = vscode.commands.registerCommand(
     "scopedReplace.smartFind",
     async () => {
@@ -27,14 +45,7 @@ export function activate(context: vscode.ExtensionContext) {
       quickPick.title = "ScopedReplace";
       quickPick.placeholder = "Find (Enter: Next, Shift+Enter: Previous)";
       quickPick.ignoreFocusOut = true;
-
-      let prevHandler: (() => void) | undefined;
-
-      context.subscriptions.push(
-        vscode.commands.registerCommand("scopedReplace.prevMatch", () => {
-          prevHandler?.();
-        }),
-      );
+      currentQuickPick = quickPick;
 
       prevHandler = movePrev;
 
@@ -207,6 +218,7 @@ export function activate(context: vscode.ExtensionContext) {
         moveNext();
       });
 
+      // 버튼 눌렀을 때 토글 ui 생성
       function createToggleButton(
         enabled: boolean,
         icon: string,
@@ -240,6 +252,8 @@ export function activate(context: vscode.ExtensionContext) {
           updateSearch(quickPick.value);
         }
       });
+
+      // 생성된 토글 ui로 refresh
       function refreshButtons() {
         const newRegexBtn = createToggleButton(regexEnabled, "regex", "Regex");
         const newCaseBtn = createToggleButton(
@@ -250,9 +264,9 @@ export function activate(context: vscode.ExtensionContext) {
         const newWordBtn = createToggleButton(wholeWord, "whole-word", "Word");
 
         quickPick.buttons = [
-          regexBtn,
-          caseBtn,
-          wordBtn,
+          newRegexBtn,
+          newCaseBtn,
+          newWordBtn,
           replaceBtn,
           replaceAllBtn,
         ];
@@ -262,6 +276,7 @@ export function activate(context: vscode.ExtensionContext) {
         editor.setDecorations(matchDecoration, []);
         editor.setDecorations(currentDecoration, []);
         quickPick.dispose();
+        currentQuickPick = undefined;
       });
 
       quickPick.show();
