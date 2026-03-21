@@ -32,6 +32,11 @@
         "key": "ctrl+f",
         "mac": "cmd+f",
         "when": "editorTextFocus && !findWidgetVisible"
+      },
+      {
+        "key": "shift+enter",
+        "command": "scopedReplace.prevMatch",
+        "when": "inQuickOpen"
       }
     ]
   },

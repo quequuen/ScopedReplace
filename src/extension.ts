@@ -7,7 +7,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   const currentDecoration = vscode.window.createTextEditorDecorationType({
-    backgroundColor: "rgba(0, 255, 4, 0.5)",
+    backgroundColor: "rgba(0, 255, 4, 0.25)",
   });
 
   const disposable = vscode.commands.registerCommand(
@@ -25,8 +25,18 @@ export function activate(context: vscode.ExtensionContext) {
 
       const quickPick = vscode.window.createQuickPick();
       quickPick.title = "ScopedReplace";
-      quickPick.placeholder = "검색어 입력 (Enter: next, Shift+Enter: prev)";
+      quickPick.placeholder = "Find (Enter: Next, Shift+Enter: Previous)";
       quickPick.ignoreFocusOut = true;
+
+      let prevHandler: (() => void) | undefined;
+
+      context.subscriptions.push(
+        vscode.commands.registerCommand("scopedReplace.prevMatch", () => {
+          prevHandler?.();
+        }),
+      );
+
+      prevHandler = movePrev;
 
       // 옵션 상태 플래그
       // 정규식 입력
@@ -37,27 +47,27 @@ export function activate(context: vscode.ExtensionContext) {
       let wholeWord = false;
 
       // 버튼
-      const regexBtn = {
+      const regexBtn: vscode.QuickInputButton = {
         iconPath: new vscode.ThemeIcon("regex"),
         tooltip: "Regex",
       };
 
-      const caseBtn = {
+      const caseBtn: vscode.QuickInputButton = {
         iconPath: new vscode.ThemeIcon("case-sensitive"),
         tooltip: "Case Sensitive",
       };
 
-      const wordBtn = {
+      const wordBtn: vscode.QuickInputButton = {
         iconPath: new vscode.ThemeIcon("whole-word"),
         tooltip: "Whole Word",
       };
 
-      const replaceBtn = {
+      const replaceBtn: vscode.QuickInputButton = {
         iconPath: new vscode.ThemeIcon("replace"),
         tooltip: "Replace Current",
       };
 
-      const replaceAllBtn = {
+      const replaceAllBtn: vscode.QuickInputButton = {
         iconPath: new vscode.ThemeIcon("replace-all"),
         tooltip: "Replace All",
       };
@@ -73,6 +83,8 @@ export function activate(context: vscode.ExtensionContext) {
       let foundRanges: vscode.Range[] = [];
       let currentMatchIndex = -1;
 
+      quickPick.value = editor.document.getText(selection);
+      updateSearch(quickPick.value);
       function buildRegex(searchText: string): RegExp | null {
         console.log("buildRegex...");
 
@@ -195,88 +207,56 @@ export function activate(context: vscode.ExtensionContext) {
         moveNext();
       });
 
-      vscode.commands.registerCommand("scopedReplace.prevMatch", movePrev);
+      function createToggleButton(
+        enabled: boolean,
+        icon: string,
+        tooltip: string,
+      ): vscode.QuickInputButton {
+        return {
+          iconPath: new vscode.ThemeIcon(
+            icon,
+            enabled ? new vscode.ThemeColor("button.background") : undefined,
+          ),
+          tooltip: `${tooltip} ${enabled ? "ON" : "OFF"}`,
+        };
+      }
 
-      quickPick.onDidTriggerButton(async (button) => {
+      quickPick.onDidTriggerButton((button) => {
         if (button === regexBtn) {
           regexEnabled = !regexEnabled;
-
-          regexBtn.iconPath = new vscode.ThemeIcon(
-            regexEnabled ? "check" : "regex",
-          );
-          regexBtn.tooltip = regexEnabled ? "Regex: ON" : "Regex: OFF";
-
-          quickPick.buttons = [...quickPick.buttons];
-
+          refreshButtons();
           updateSearch(quickPick.value);
         }
 
         if (button === caseBtn) {
           caseSensitive = !caseSensitive;
-
-          caseBtn.iconPath = new vscode.ThemeIcon(
-            caseSensitive ? "check" : "case-sensitive",
-          );
-
-          caseBtn.tooltip = caseSensitive
-            ? "Case Sensitive: ON"
-            : "Case Sensitive: OFF";
-
-          quickPick.buttons = [...quickPick.buttons];
-
+          refreshButtons();
           updateSearch(quickPick.value);
         }
 
         if (button === wordBtn) {
           wholeWord = !wholeWord;
-
-          wordBtn.iconPath = new vscode.ThemeIcon(
-            wholeWord ? "check" : "whole-word",
-          );
-
-          wordBtn.tooltip = wholeWord ? "whole-word: ON" : "whole-word: OFF";
-
-          quickPick.buttons = [...quickPick.buttons];
-
-          updateSearch(quickPick.value);
-        }
-
-        if (button === replaceBtn) {
-          if (currentMatchIndex < 0) return;
-
-          const replaceText = await vscode.window.showInputBox({
-            prompt: "바꿀 내용",
-          });
-
-          if (!replaceText) return;
-
-          await editor.edit((editBuilder) => {
-            editBuilder.replace(foundRanges[currentMatchIndex], replaceText);
-          });
-
-          updateSearch(quickPick.value);
-        }
-
-        if (button === replaceAllBtn) {
-          const replaceText = await vscode.window.showInputBox({
-            prompt: "수정할 내용",
-          });
-
-          if (!replaceText) return;
-
-          await editor.edit((editBuilder) => {
-            for (let i = foundRanges.length - 1; i >= 0; i--) {
-              editBuilder.replace(foundRanges[i], replaceText);
-            }
-          });
-
-          vscode.window.showInformationMessage(
-            `${foundRanges.length}개 항목 변경 완료`,
-          );
-
+          refreshButtons();
           updateSearch(quickPick.value);
         }
       });
+      function refreshButtons() {
+        const newRegexBtn = createToggleButton(regexEnabled, "regex", "Regex");
+        const newCaseBtn = createToggleButton(
+          caseSensitive,
+          "case-sensitive",
+          "Case",
+        );
+        const newWordBtn = createToggleButton(wholeWord, "whole-word", "Word");
+
+        quickPick.buttons = [
+          regexBtn,
+          caseBtn,
+          wordBtn,
+          replaceBtn,
+          replaceAllBtn,
+        ];
+      }
 
       quickPick.onDidHide(() => {
         editor.setDecorations(matchDecoration, []);
