@@ -94,7 +94,6 @@ export function activate(context: vscode.ExtensionContext) {
       let foundRanges: vscode.Range[] = [];
       let currentMatchIndex = -1;
 
-      quickPick.value = editor.document.getText(selection);
       updateSearch(quickPick.value);
       function buildRegex(searchText: string): RegExp | null {
         console.log("buildRegex...");
@@ -229,28 +228,33 @@ export function activate(context: vscode.ExtensionContext) {
             icon,
             enabled ? new vscode.ThemeColor("button.background") : undefined,
           ),
-          tooltip: `${tooltip} ${enabled ? "ON" : "OFF"}`,
+          tooltip: tooltip, // 상태 제거
         };
       }
 
       quickPick.onDidTriggerButton((button) => {
-        if (button === regexBtn) {
+        if (button.tooltip === "Regex") {
           regexEnabled = !regexEnabled;
-          refreshButtons();
-          updateSearch(quickPick.value);
         }
 
-        if (button === caseBtn) {
+        if (button.tooltip === "Case") {
           caseSensitive = !caseSensitive;
-          refreshButtons();
-          updateSearch(quickPick.value);
         }
 
-        if (button === wordBtn) {
+        if (button.tooltip === "Word") {
           wholeWord = !wholeWord;
-          refreshButtons();
-          updateSearch(quickPick.value);
         }
+
+        if (button.tooltip === "Replace Current") {
+          replaceCurrent();
+        }
+
+        if (button.tooltip === "Replace All") {
+          replaceAll();
+        }
+
+        refreshButtons();
+        updateSearch(quickPick.value);
       });
 
       // 생성된 토글 ui로 refresh
