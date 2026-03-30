@@ -257,6 +257,35 @@ export function activate(context: vscode.ExtensionContext) {
         updateSearch(quickPick.value);
       });
 
+      // 현재 일치하는 항목 바꾸기
+      function replaceCurrent() {
+        if (currentMatchIndex < 0 || currentMatchIndex >= foundRanges.length) {
+          console.log(currentMatchIndex, foundRanges.length);
+          console.log("No match to replace");
+          return;
+        }
+
+        const range = foundRanges[currentMatchIndex];
+        editor.edit((editBuilder) => {
+          console.log(editBuilder);
+          console.log("Replacing current match");
+          editBuilder.replace(range, quickPick.value);
+        });
+      }
+
+      // 현재 일치하는 항목 모두 바꾸기
+      function replaceAll() {
+        if (foundRanges.length === 0) return;
+
+        editor.edit((editBuilder) => {
+          for (const range of foundRanges) {
+            editBuilder.replace(range, quickPick.value);
+          }
+        });
+      }
+
+      // 현재 일치하는 항목 모두 바꾸기
+
       // 생성된 토글 ui로 refresh
       function refreshButtons() {
         const newRegexBtn = createToggleButton(regexEnabled, "regex", "Regex");
