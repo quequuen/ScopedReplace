@@ -95,6 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
       let currentMatchIndex = -1;
 
       updateSearch(quickPick.value);
+
       function buildRegex(searchText: string): RegExp | null {
         console.log("buildRegex...");
 
@@ -136,6 +137,12 @@ export function activate(context: vscode.ExtensionContext) {
 
       function updateSearch(searchText: string) {
         console.log("updateSearch...", searchText);
+
+        // null check 필요한지 확인 필요
+        if (searchText === null || searchText === "") {
+          quickPick.value = "";
+        }
+
         const regex = buildRegex(searchText);
 
         if (!regex) {
@@ -232,25 +239,64 @@ export function activate(context: vscode.ExtensionContext) {
         };
       }
 
-      quickPick.onDidTriggerButton((button) => {
+      quickPick.onDidTriggerButton(async (button) => {
         if (button.tooltip === "Regex") {
+          console.log("Regex");
           regexEnabled = !regexEnabled;
+          refreshButtons();
+          updateSearch(quickPick.value);
         }
 
         if (button.tooltip === "Case") {
+          console.log("CaseSensitive");
           caseSensitive = !caseSensitive;
+          refreshButtons();
+          updateSearch(quickPick.value);
         }
 
         if (button.tooltip === "Word") {
+          console.log("WholeWord");
           wholeWord = !wholeWord;
+          refreshButtons();
+          updateSearch(quickPick.value);
         }
 
         if (button.tooltip === "Replace Current") {
-          replaceCurrent();
+          console.log("Replace Current");
+          if (currentMatchIndex < 0) return;
+
+          const replaceText = await vscode.window.showInputBox({
+            prompt: "바꿀 내용",
+          });
+
+          if (!replaceText) return;
+
+          await editor.edit((editBuilder) => {
+            editBuilder.replace(foundRanges[currentMatchIndex], replaceText);
+          });
+
+          updateSearch(quickPick.value);
         }
 
         if (button.tooltip === "Replace All") {
-          replaceAll();
+          console.log("Replace All");
+          const replaceText = await vscode.window.showInputBox({
+            prompt: "바꿀 내용",
+          });
+
+          if (!replaceText) return;
+
+          await editor.edit((editBuilder) => {
+            for (let i = foundRanges.length - 1; i >= 0; i--) {
+              editBuilder.replace(foundRanges[i], replaceText);
+            }
+          });
+
+          vscode.window.showInformationMessage(
+            `${foundRanges.length}개 항목 변경 완료`,
+          );
+
+          updateSearch(quickPick.value);
         }
 
         refreshButtons();
