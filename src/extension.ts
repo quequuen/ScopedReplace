@@ -138,11 +138,6 @@ export function activate(context: vscode.ExtensionContext) {
       function updateSearch(searchText: string) {
         console.log("updateSearch...", searchText);
 
-        // null check 필요한지 확인 필요
-        if (searchText === null || searchText === "") {
-          quickPick.value = "";
-        }
-
         const regex = buildRegex(searchText);
 
         if (!regex) {
@@ -247,14 +242,14 @@ export function activate(context: vscode.ExtensionContext) {
           updateSearch(quickPick.value);
         }
 
-        if (button.tooltip === "Case") {
+        if (button.tooltip === "Case Sensitive") {
           console.log("CaseSensitive");
           caseSensitive = !caseSensitive;
           refreshButtons();
           updateSearch(quickPick.value);
         }
 
-        if (button.tooltip === "Word") {
+        if (button.tooltip === "Whole Word") {
           console.log("WholeWord");
           wholeWord = !wholeWord;
           refreshButtons();
@@ -262,14 +257,17 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         if (button.tooltip === "Replace Current") {
-          console.log("Replace Current");
+          if (currentMatchIndex < 0 && foundRanges.length > 0) {
+            currentMatchIndex = 0;
+          }
+
           if (currentMatchIndex < 0) return;
 
           const replaceText = await vscode.window.showInputBox({
             prompt: "바꿀 내용",
           });
 
-          if (!replaceText) return;
+          if (replaceText === undefined) return;
 
           await editor.edit((editBuilder) => {
             editBuilder.replace(foundRanges[currentMatchIndex], replaceText);
@@ -300,7 +298,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         refreshButtons();
-        updateSearch(quickPick.value);
       });
 
       // 현재 일치하는 항목 바꾸기
@@ -343,11 +340,17 @@ export function activate(context: vscode.ExtensionContext) {
         const newWordBtn = createToggleButton(wholeWord, "whole-word", "Word");
 
         quickPick.buttons = [
-          newRegexBtn,
-          newCaseBtn,
-          newWordBtn,
-          replaceBtn,
-          replaceAllBtn,
+          createToggleButton(regexEnabled, "regex", "Regex"),
+          createToggleButton(caseSensitive, "case-sensitive", "Case"),
+          createToggleButton(wholeWord, "whole-word", "Word"),
+          {
+            iconPath: new vscode.ThemeIcon("replace"),
+            tooltip: "Replace Current",
+          },
+          {
+            iconPath: new vscode.ThemeIcon("replace-all"),
+            tooltip: "Replace All",
+          },
         ];
       }
 
